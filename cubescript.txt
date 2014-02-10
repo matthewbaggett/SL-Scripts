@@ -1,0 +1,225 @@
+integer age = 0;
+integer age_min = 1;
+integer age_max = 50;
+integer age_seconds_per_unit = 2;
+integer age_min_breed = 18; // Why don't you take a chair over there...
+integer life_began = 0;
+integer life_seconds = 0;
+float size = 0.25;
+float size_min = 0.25;
+float size_max = 1.5;
+vector size_vec = <size, size, size>;
+integer present_cube_count = 0;
+integer present_cube_count_max = 10;
+
+integer time_spawned = 0;
+integer time_between_spawn = 10;
+integer breed_count = 0;
+
+float impulse_offset = 1.8;
+
+integer broadcast_channel = 73195;
+
+// Name Dictionary
+list male_names = ["Anthony", "Brandon", "Caleb", "Cameron", "Christian", "Christopher", "Daniel", "David", "Elijah", "Ethan", "Gabriel", "Isaiah", "James", "Jayden", "Jaylen", "Jeremiah", "Jordan", "Joseph", "Joshua", "Josiah", "Justin", "Kevin", "Malik", "Matthew", "Michael", "Nathan", "Tyler", "William", "Xavier", "Zion"];
+list female_names = ["Aliyah", "Alexandra", "Alexis", "Alyssa", "Angel", "Aniyah", "Brianna", "Chloe", "Destiny", "Diamond", "Gabrielle", "Hailey", "Hannah", "Imani", "Isis", "Jada", "Jasmine", "Jayla", "Jordan", "Kayla", "Kennedy", "Kiara", "Laila", "Madison", "Makayla", "Nevaeh", "Sydney", "Taylor", "Tiana", "Trinity"];
+
+// Personality
+string name;
+integer is_male = FALSE;
+integer generation = 0;
+string parent_1;
+string parent_2;
+key partner_key;
+string partner_name;
+
+integer randInt(integer n){
+     return (integer)llFrand(n + 1);
+}
+
+integer randIntBetween(integer min, integer max){
+    return min + randInt(max - min);
+}
+
+breed(){
+    //debug( name + ": THE FUN CANNOT BE HALTED");
+    llPlaySound("2597d6fe-e320-709e-efbf-38c9a63d81ca", 1.0);
+    llRezObject(llGetObjectName(), llGetPos() + <0,0,2>, ZERO_VECTOR, ZERO_ROTATION, 0);
+    time_spawned = llGetUnixTime();
+    breed_count = breed_count + 1;
+}
+
+update_size() {
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_PHYSICS, FALSE]);
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_SIZE, size_vec]);
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_PHYSICS, TRUE]);
+}
+
+debug(string message){
+    llOwnerSay(message);
+}
+
+update_name_and_colour(){
+    llSetText(name + ", Age: " + (string)age + ", Gen: " + (string)generation, <1,1,1>, 1.0);
+    if(age >= age_min_breed){
+        if(is_male){
+            llSetColor(<0.1, 0.1, 0.6>, ALL_SIDES);
+        }else{
+            llSetColor(<0.941, 0.071, 0.745>, ALL_SIDES);
+        }
+    }else{
+        if(is_male){
+            llSetColor(<0.498, 0.859, 1.000>, ALL_SIDES);
+        }else{
+            llSetColor(<1, 0.6, 1>, ALL_SIDES);
+        }
+    }        
+}
+
+apply_impulse(){
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_PHYSICS, FALSE]);
+    llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_PHYSICS, TRUE]);
+    list params = llGetLinkPrimitiveParams(LINK_THIS, [PRIM_SIZE]);
+    vector size = llList2Vector(params, 0);
+    float mass = llGetMass();
+    float impulse = mass * impulse_offset;
+    
+    vector impulse_vec = <0, 0, impulse>;
+    //debug("Mass: " + (string)mass + " Offset: " + (string)impulse_offset + " Impulse: " + (string)impulse + ", Impulse vec: " + (string)impulse_vec);
+    llApplyImpulse(impulse_vec, FALSE);
+}
+
+default {
+    state_entry() {
+        llLoopSound("d79efef0-05fc-c546-9160-8f379eb6fe99", 0.5);
+        llSetTimerEvent(0.476);
+        update_size();
+        llCollisionFilter(llGetObjectName(), NULL_KEY, TRUE);
+        life_began = llGetUnixTime();
+        
+        // Gender
+        list randomised_names;
+        if(randIntBetween(0,1) == 1){
+            is_male = TRUE ;
+            randomised_names = llListRandomize(male_names, 1);
+        }else{
+            is_male = FALSE;
+            randomised_names = llListRandomize(female_names, 1);
+        }
+
+        // Personality
+        name = llList2String(randomised_names, 0);
+        update_name_and_colour();
+        //debug( name + ": Cuuuuube...");
+        llPlaySound("eacd7e85-19ab-c504-d305-895af672a422", 1.0);
+        llListen(broadcast_channel + 0, "", "", "");
+        llListen(broadcast_channel + 1, "", "", "");
+    }
+    
+    listen(integer channel, string remote_name, key id, string message){
+        if(channel == PUBLIC_CHANNEL && id == llGetOwner()){
+            if(llSubStringIndex(llToLower(llGetObjectName()), llToLower(message)) == 0){
+                llDie();
+            }
+        }
+        if(channel == broadcast_channel){
+            list data = llCSV2List(message);
+            generation = llList2Integer(data, 0);
+            parent_1 = llList2String(data, 1);
+            parent_2 = llList2String(data, 2);
+            debug("Generation: " + (string)generation + ", Parents: " + parent_1 + " & " + parent_2);
+            integer parent_1_half_length = llFloor((float)llStringLength(parent_1) / 2.0);
+            string parent_1_half = llGetSubString(parent_1, 0, parent_1_half_length);
+            integer parent_2_half_length = llFloor((float)llStringLength(parent_2) / 2.0);
+            string parent_2_half = llGetSubString(parent_2, parent_2_half_length, -1);
+            
+            string generated_name = parent_1_half + parent_2_half;
+            //debug(name + " becomes " + generated_name);
+            name = generated_name;
+            update_name_and_colour();
+        }
+        //partner_key, broadcast_channel+1, "Who are you?"
+        if(channel == broadcast_channel+1 && message == "Who are you?"){
+            //debug("Asked to identify by " + (string)id + " Answering as " + name);
+            llRegionSayTo(id, broadcast_channel+1, name);    
+        }else if(channel == broadcast_channel+1){
+            partner_name = message;
+            //debug((string)id + " identified as " + partner_name);
+        }
+    }
+
+    timer() {
+        integer time_now = llGetUnixTime();
+        float life_current = time_now - life_began;
+        integer new_life_seconds = llRound(life_current);
+        //debug( (string)life_began + ", " + (string)time_now + ", " + (string)life_current);
+        if(new_life_seconds > life_seconds || life_seconds == 0){
+            life_seconds = new_life_seconds;
+            float new_age = life_seconds / age_seconds_per_unit;
+            
+            if(new_age != age && new_age <= age_max){
+                age = llRound(new_age);
+                float new_size = ((size_max/100) * age) + size_min;
+                if(new_size > size){
+                    size = new_size;
+                }
+                update_name_and_colour();
+                vector size_change = <size, size, size>;
+                llSetScale(size_change);
+                size_vec = size_change;
+                update_size();
+            }
+        }
+        //debug( "Mass: " + (string)llGetMass() + " " + (string)llGetPrimitiveParams([PRIM_SIZE]));
+        apply_impulse();
+        llSensor(llGetObjectName(), NULL_KEY, SCRIPTED, 96.0, TWO_PI);
+        
+        if(age >= age_max){
+            if(present_cube_count > 2){
+                llSetObjectName(llGetObjectName() + " - Dead");
+                llSetLinkPrimitiveParamsFast(LINK_THIS, [PRIM_PHYSICS, FALSE]);
+                debug( name + ": Died after spawning " + (string)breed_count + " cubes");
+                llDie();
+            }
+        }
+    }
+    
+    sensor(integer detected){
+        // Count ourselves into this...
+        detected = detected + 1;
+        if(detected != present_cube_count){
+            //debug( "Detected " + (string)detected + " other cubes");
+            present_cube_count = detected;
+        }
+    }
+    
+    on_rez(integer parameter){
+        llStopSound();
+        llSetText((string)parameter, <0,0,0>, 0);
+        llResetScript();
+    }
+    
+    object_rez(key child_key){
+         llGiveInventory(child_key, llGetObjectName());
+         integer next_generation = generation + 1;
+         list data = [next_generation, name, partner_name];
+         llSleep(2);
+         llRegionSayTo(child_key, broadcast_channel, llList2CSV(data));
+    }
+    
+    collision_start(integer total_number){
+
+        if(age >= age_min_breed){
+            if(time_spawned < llGetUnixTime() - time_between_spawn){
+                if(present_cube_count_max >= present_cube_count){
+                    partner_key = llDetectedKey(0);
+                    debug("Asking partner to identify " + (string)partner_key);
+                    llRegionSayTo(partner_key, broadcast_channel+1, "Who are you?");
+                    breed();
+                }
+            }
+        }
+    }
+}
+
+
